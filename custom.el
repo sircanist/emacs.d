@@ -4,6 +4,7 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(latex-run-command "pdflatex")
+ '(org-hugo-export-with-toc t)
  '(tex-bibtex-command "/usr/bin/vendor_perl/biber"))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.

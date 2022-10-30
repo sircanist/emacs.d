@@ -2,11 +2,11 @@
 (require 'package)
 
 ;; Add MELPA
-;;(add-to-list 'package-archives
-;;             '("melpa" . "https://melpa.org/packages/") t)
+(add-to-list 'package-archives
+             '("melpa" . "https://melpa.org/packages/") t)
 ;;(add-to-list 'package-archives
 ;             '("melpa" . "https://raw.githubusercontent.com/sircanist/emacs-mirror/main/"))
-(setq package-archives '(("melpa" . "~/emacs-mirror/")))
+;(setq package-archives '(("melpa" . "~/emacs-mirror/")))
 (unless package--initialized
   (package-initialize))
 
@@ -25,6 +25,7 @@
         modus-vivendi-theme
         rainbow-delimiters
         org-roam
+        ox-hugo
         ))
 
 ;; Ensure all the packages are installed
@@ -264,3 +265,19 @@ tasks."
 
 (add-to-list 'load-path "~/.emacs.d/site-lisp/elpa-mirror")
 (require 'elpa-mirror)
+
+;; ox-hugo enable export
+
+(with-eval-after-load 'ox
+ (require 'ox-hugo))
+
+(setq org-hugo-base-dir  "~/notes/.hugo")
+
+
+(require 'ox-hugo)
+
+(defun build/export-all ()
+  (dolist (org-file (directory-files-recursively org-roam-directory "\.org$"))
+    (with-current-buffer (find-file org-file)
+      (message (format "[build] Exporting %s" org-file))
+      (when (not (cl-search "/templates" org-file)) (org-hugo-export-wim-to-md :all-subtrees nil nil nil)))))
