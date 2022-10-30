@@ -2,9 +2,11 @@
 (require 'package)
 
 ;; Add MELPA
-(add-to-list 'package-archives
-             '("melpa" . "https://melpa.org/packages/") t)
-
+;;(add-to-list 'package-archives
+;;             '("melpa" . "https://melpa.org/packages/") t)
+;;(add-to-list 'package-archives
+;             '("melpa" . "https://raw.githubusercontent.com/sircanist/emacs-mirror/main/"))
+(setq package-archives '(("melpa" . "~/emacs-mirror/")))
 (unless package--initialized
   (package-initialize))
 
@@ -23,8 +25,6 @@
         modus-vivendi-theme
         rainbow-delimiters
         org-roam
-        htmlize
-        org-download
         ))
 
 ;; Ensure all the packages are installed
@@ -139,7 +139,6 @@
   "," 'counsel-switch-buffer
   "f r" 'counsel-recentf
   "b s" 'save-buffer
-  "b d" 'evil-delete-buffer
   "b k" (lambda ()
          (interactive)
          (kill-buffer (current-buffer)))
@@ -161,9 +160,11 @@
   "r f" 'org-roam-node-find
   "r i" 'org-roam-node-insert
   "r t" 'org-roam-buffer-toggle
+  "r e" 'org-roam-extract-subtree
   "r j n" 'org-roam-dailies-capture-today
   "r j t" 'org-roam-dailies-capture-tomorrow
   "r j y" 'org-roam-dailies-capture-yesterday
+  "o a" 'org-agenda
   )
 
 (defun toggle-maximize-buffer () "Maximize buffer"
@@ -174,7 +175,7 @@
       (window-configuration-to-register '_)
       (delete-other-windows))))
 
-; org-roam
+;; org-roam
 (setq org-roam-directory (file-truename "~/notes"))
 (org-roam-db-autosync-mode)
 
@@ -188,11 +189,78 @@
                :target (file+head "hacking/%<%Y-%m-%dT%H%M%S>-${slug}.org" "#+title: ${title}\n#+created: %<%Y-%m-%dT%H%M%S>\n#+filetags: hacking")
                :unnarrowed t))
 
-
-;; Drag-and-drop to `dired` org-download
-(require 'org-download)
-(add-hook 'dired-mode-hook 'org-download-enable)
-
-
 ; use undo-tree for undo system
 ;(global-undo-tree-mode)
+
+; manage TODO for org-roam
+; TODO tag is automatically added or removed for org files on save or open
+; files with TODO tag are added to agenda
+
+(defun vulpea-project-p ()
+  "Return non-nil if current buffer has any todo entry.
+
+TODO entries marked as done are ignored, meaning the this
+function returns nil if current buffer contains only completed
+tasks."
+  (seq-find                                 ; (3)
+   (lambda (type)
+     (eq type 'todo))
+   (org-element-map                         ; (2)
+       (org-element-parse-buffer 'headline) ; (1)
+       'headline
+     (lambda (h)
+       (org-element-property :todo-type h)))))
+(defun vulpea-buffer-prop-get (name)
+  "Get a buffer property called NAME as a string."
+  (org-with-point-at 1
+    (when (re-search-forward (concat "^#\\+" name ": \\(.*\\)")
+                             (point-max) t)
+      (buffer-substring-no-properties
+       (match-beginning 1)
+       (match-end 1)))))
+
+(defun vulpea-project-update-tag ()
+    "Update PROJECT tag in the current buffer."
+    (when (and (not (active-minibuffer-window))
+               (vulpea-buffer-p))
+      (save-excursion
+        (if (vulpea-project-p)
+            (org-roam-tag-add '("project"))
+            (if (vulpea-buffer-prop-get "filetags")
+              (if (string-match "project" (vulpea-buffer-prop-get "filetags"))
+              (org-roam-tag-remove '("project"))
+              )
+          )
+        ))))
+
+(defun vulpea-buffer-p ()
+  "Return non-nil if the currently visited buffer is a note."
+  (and buffer-file-name
+       (string-prefix-p
+        (expand-file-name (file-name-as-directory org-roam-directory))
+        (file-name-directory buffer-file-name))))
+
+(defun vulpea-project-files ()
+    "Return a list of note files containing 'project' tag." ;
+    (seq-uniq
+     (seq-map
+      #'car
+      (org-roam-db-query
+       [:select [nodes:file]
+        :from tags
+        :left-join nodes
+        :on (= tags:node-id nodes:id)
+        :where (like tag (quote "%\"project\"%"))]))))
+
+(defun vulpea-agenda-files-update (&rest _)
+  "Update the value of `org-agenda-files'."
+  (setq org-agenda-files (vulpea-project-files)))
+
+(add-hook 'find-file-hook #'vulpea-project-update-tag)
+(add-hook 'before-save-hook #'vulpea-project-update-tag)
+
+(advice-add 'org-agenda :before #'vulpea-agenda-files-update)
+(advice-add 'org-todo-list :before #'vulpea-agenda-files-update)
+
+(add-to-list 'load-path "~/.emacs.d/site-lisp/elpa-mirror")
+(require 'elpa-mirror)
